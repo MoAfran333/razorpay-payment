@@ -24,6 +24,10 @@ app.get("/api/get-key", (req, res) => {
   return res.status(200).json({ key: process.env.RAZORPAY_KEY_ID });
 });
 
+app.get("/", (req, res) => {
+  return res.send("Server is running");
+});
+
 const port = process.env.PORT || 5000;
 
 app.listen(port, () => {
