@@ -9,21 +9,37 @@ const instance = new razorpay({
 });
 
 const checkoutPayment = async (req, res) => {
-  const options = {
-    amount: Number(req.body.amount * 100),
-    currency: "INR",
-  };
+  try {
+    const options = {
+      amount: Number(req.body.amount * 100),
+      currency: "INR",
+    };
 
-  const order = await instance.orders.create(options);
-  console.log("order : ", order);
+    // TODO: create a new payment database row here with the status as pending and the order id - DONE
 
-  if (!order) {
+    const order = await instance.orders.create(options);
+    console.log("order : ", order);
+
+    if (!order) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Error creating the Order" });
+    }
+
+    const newPayment = await Payment({
+      razorpay_order_id: order.id,
+      payment_status: "pending",
+    });
+
+    await newPayment.save();
+
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console, log(`Error : ${error.message}`);
     return res
-      .status(400)
-      .json({ success: false, error: "Error creating the Order" });
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
   }
-
-  res.status(200).json({ success: true, order });
 };
 
 const verifyPayment = async (req, res) => {
@@ -41,7 +57,7 @@ const verifyPayment = async (req, res) => {
     const isEqual = expectedSignature === razorpay_signature;
 
     if (!isEqual) {
-      res
+      return res
         .status(400)
         .json({ success: false, error: "Error in validating the payment" });
     }
@@ -67,22 +83,121 @@ const verifyPayment = async (req, res) => {
     );
     const data = await response.json();
 
-    const newPayment = await Payment({
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      payment_status: data.status,
-    });
+    // TODO-DONE: Remove the creation of the database row here and make it an update function.
+    // TODO-DONE: Add the payment_id, signature and payment status to the required row
 
-    await newPayment.save();
-    res.redirect(
+    const requiredPayment = await Payment.findOne({ razorpay_order_id });
+
+    if (!requiredPayment) {
+      return res
+        .status(404)
+        .json({ success: false, error: "could not find the order id" });
+    }
+
+    await Payment.findOneAndUpdate(
+      { razorpay_order_id },
+      {
+        $set: {
+          razorpay_payment_id,
+          razorpay_signature,
+          payment_status: data.status,
+        },
+      }
+    );
+
+    return res.redirect(
       `http://localhost:5173/paymentsuccess?reference=${razorpay_payment_id}`
     );
     //   res.status(201).json({ success: true, data: newPayment });
   } catch (error) {
     console.log(`Error occures, ${error.message}`);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal Server Error" });
   }
 };
 
-module.exports = { checkoutPayment, verifyPayment };
+const exittedmodal = async (req, res) => {
+  // TODO: update the payment status when modal is closed
+
+  const { order_id: razorpay_order_id } = req.params;
+
+  try {
+    const requiredOrder = await Payment.findOne({ razorpay_order_id });
+
+    if (!requiredOrder) {
+      return res.status(404).json({ success: false, message: "Missing Order" });
+    }
+
+    if (requiredOrder.failed_reason === null) {
+      await Payment.findOneAndUpdate(
+        { razorpay_order_id },
+        {
+          $set: {
+            payment_status: "failed",
+            failure_reason: "User closed the modal before paying",
+          },
+        }
+      );
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Payment Cancelled" });
+  } catch (err) {
+    console.log(`Error, ${err.message}`);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal Server Error" });
+  }
+};
+
+// const failedPayment = async (req, res) => {
+//   try {
+//     console.log(req);
+//     console.log(`This payment has failed`);
+//   } catch (err) {
+//     console.log(`Error, ${err.message}`);
+//     return res.status(500).json({ success: false, error: "Internal Server Error" });
+//   }
+// };
+
+const webhook = async (req, res) => {
+  const { event } = req.body;
+  const payload = req.body.payload.payment.entity;
+
+  try {
+    console.log(event);
+    console.log(payload);
+
+    await Payment.findOneAndUpdate(
+      { razorpay_order_id: payload.order_id },
+      {
+        $set: {
+          razorpay_payment_id: payload.id,
+          payment_status: event,
+          failure_reason: payload.error_description,
+        },
+      }
+    );
+
+    return res.status(200).json({ success: true, message: "Payment Failed" });
+  } catch (error) {
+    console.log(`Error, ${err.message}`);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal Server Error" });
+  }
+};
+
+const refund = async (req, res) => {
+  // TODO: Add a refund function to manually refund the amount and update the db accordingly
+};
+
+module.exports = {
+  checkoutPayment,
+  verifyPayment,
+  webhook,
+  refund,
+  exittedmodal,
+};

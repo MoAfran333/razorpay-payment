@@ -24,12 +24,35 @@ const Home = () => {
       description: "Razorpay tutorial",
       image: "https://avatars.githubusercontent.com/u/96648429?s=96&v=4",
       order_id: order.id.toString(),
-      callback_url:
-        "https://67484c386999d10008c02c67--adorable-kheer-f390b0.netlify.app/api/payments/verify",
+
+      // TODO-DONE: Remove the callback url and add a handler function to verify the payment
+      // TODO-DONE: Add onPaymentSuccess (handler)
+
+      // NOTE: onPaymnentFailure - Does NOT exist
+
+      // TODO-DONE: modal:{ondismiss function}
+
+      // callback_url: "/api/payments/verify",
       // redirect: true,
+
+      handler: async function () {
+        const res = await axios.post(`/api/payments/verify`);
+        const data = res.data;
+        if (!data.success) {
+          alert(data.error);
+        }
+      },
+      onPaymentFailure: async function () {
+        const res = await axios.post(`/api/payments/failed-payment`);
+        console.log(`res, ${res}`);
+        const data = res.data;
+        if (!data.success) {
+          alert(data.error);
+        }
+      },
       prefill: {
-        name: "Sagar gupta",
-        email: "anandguptasir@gmail.com",
+        name: "test",
+        email: "test@gmail.com",
         contact: "1234567890",
       },
       notes: {
@@ -37,6 +60,19 @@ const Home = () => {
       },
       theme: {
         color: "#3399cc",
+      },
+      modal: {
+        ondismiss: async function () {
+          const res = await axios.post(
+            `/api/payments/exitted-modal/${order.id}`
+          );
+          const data = res.data;
+          if (data.success) {
+            alert(data.message);
+          } else {
+            alert(data.error);
+          }
+        },
       },
     };
     const razor = new window.Razorpay(options);
