@@ -42,14 +42,14 @@ const Home = () => {
           alert(data.error);
         }
       },
-      onPaymentFailure: async function () {
-        const res = await axios.post(`/api/payments/failed-payment`);
-        console.log(`res, ${res}`);
-        const data = res.data;
-        if (!data.success) {
-          alert(data.error);
-        }
-      },
+      // onPaymentFailure: async function () {
+      //   const res = await axios.post(`/api/payments/failed-payment`);
+      //   console.log(`res, ${res}`);
+      //   const data = res.data;
+      //   if (!data.success) {
+      //     alert(data.error);
+      //   }
+      // },
       prefill: {
         name: "test",
         email: "test@gmail.com",
